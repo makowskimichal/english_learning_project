@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive English Learning App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .loading {
+            font-style: italic;
+            color: gray;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .question, .lesson-reading, .lesson-exercises, .lesson-summary {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Interactive English Learning App</h1>
+
+    <!-- API Key Input Section -->
+    <div id="key-section" class="section">
+        <h2>Enter Your OpenAI API Key</h2>
+        <p>To start, please provide your OpenAI API key:</p>
+        <input type="text" id="apiKeyInput" placeholder="Enter your API key" style="width: 100%; padding: 10px; margin-bottom: 10px;">
+        <button id="submitKeyButton">Submit Key</button>
+    </div>
+
+    <!-- Welcome Section -->
+    <div id="welcome-section" class="section hidden">
+        <h2>Welcome!</h2>
+        <p>Click below to start your English learning journey:</p>
+        <button id="startTestButton">Start Test</button>
+    </div>
+
+    <!-- Test Section -->
+    <div id="test-section" class="section hidden">
+        <h2>English Test</h2>
+        <form id="testForm">
+            <!-- Placeholder content displayed while fetching questions -->
+            <div class="loading">Loading your test... Please wait.</div>
+        </form>
+        <div id="submitTestLoading" class="loading hidden">Submitting answers... Generating lesson...</div>
+        <button id="submitTestButton" class="hidden">Submit Answers</button>
+    </div>
+
+    <!-- Lesson Section -->
+    <div id="lesson-section" class="section hidden">
+        <h2>Your Personalized Lesson</h2>
+        <div id="lessonContainer">
+            <!-- Placeholder for lesson -->
+            <div class="loading">Generating your lesson... Please wait.</div>
+        </div>
+        <button id="retakeTestButton">Retake Test</button>
+    </div>
+</div>
+
+<script>
+let userApiKey = ""; // Variable to hold the user's API key
+
+const testPrompt = `
+Generate a 5-question English test for an intermediate learner. 
+Exclude any indicators like "[Correct]" from the options. Provide the output as complete HTML code, ready for embedding in a web page. Format each question as:
+<div class="question">
+  <p><strong>Question text</strong></p>
+  <label><input type="radio" name="q1" value="A"> Answer A</label><br>
+  <label><input type="radio" name="q1" value="B"> Answer B</label><br>
+  <label><input type="radio" name="q1" value="C"> Answer C</label><br>
+  <label><input type="radio" name="q1" value="D"> Answer D</label><br>
+</div>
+`;
+
+const lessonPromptBase = `
+Generate a comprehensive English lesson based on intermediate learner needs. Include the following:
+1. A detailed reading section with at least 300 words.
+2. Multiple exercises:
+    - Reading comprehension questions.
+    - Grammar and sentence correction tasks.
+    - Vocabulary exercises (provide words and example sentences).
+3. A lesson summary with learning objectives and at least 3 key takeaways.
+Provide the output in this format:
+<div class="lesson-reading">
+  <h2>Reading Section</h2>
+  <p>Reading content goes here...</p>
+</div>
+<div class="lesson-exercises">
+  <h2>Exercises</h2>
+  <ul>
+    <li>Exercise content goes here...</li>
+  </ul>
+</div>
+<div class="lesson-summary">
+  <h2>Lesson Summary</h2>
+  <p>Summary content goes here...</p>
+</div>
+`;
+
+// Event Handlers
+document.getElementById('submitKeyButton').addEventListener('click', submitApiKey);
+document.getElementById('startTestButton').addEventListener('click', generateTest);
+document.getElementById('submitTestButton').addEventListener('click', generateLesson);
+document.getElementById('retakeTestButton').addEventListener('click', generateTest);
+
+// Submit API Key
+function submitApiKey() {
+    const apiKeyInput = document.getElementById('apiKeyInput').value.trim();
+    if (!apiKeyInput) {
+        alert("Please enter a valid API key.");
+        return;
+    }
+    userApiKey = apiKeyInput;
+    document.getElementById('key-section').classList.add('hidden');
+    document.getElementById('welcome-section').classList.remove('hidden');
+}
+
+// Fetch from OpenAI API
+async function fetchFromOpenAI(prompt) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userApiKey}`
+        },
+        body: JSON.stringify({
+            model: "gpt-4",
+            messages: [{ role: "user", content: prompt }]
+        })
+    });
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+// Generate Test
+async function generateTest() {
+    document.getElementById('welcome-section').classList.add('hidden');
+    document.getElementById('lesson-section').classList.add('hidden');
+    document.getElementById('test-section').classList.remove('hidden');
+
+    const testForm = document.getElementById('testForm');
+    const submitButton = document.getElementById('submitTestButton');
+
+    testForm.innerHTML = '<div class="loading">Loading your test... Please wait.</div>';
+    submitButton.classList.add('hidden');
+
+    const testHTML = await fetchFromOpenAI(testPrompt);
+    testForm.innerHTML = testHTML;
+    submitButton.classList.remove('hidden');
+}
+
+// Generate Lesson
+async function generateLesson() {
+    const selectedAnswers = Array.from(document.querySelectorAll('input[type="radio"]:checked'))
+        .map(input => input.parentElement.textContent.trim());
+    
+    if (selectedAnswers.length < 5) {
+        alert("Please answer all questions before submitting.");
+        return;
+    }
+
+    const lessonPrompt = `${lessonPromptBase}
+    The student's selected answers were: ${selectedAnswers.join(", ")}`;
+    
+    const submitLoading = document.getElementById('submitTestLoading');
+    const lessonContainer = document.getElementById('lessonContainer');
+
+    submitLoading.classList.remove('hidden');
+    lessonContainer.innerHTML = '';
+
+    const lessonHTML = await fetchFromOpenAI(lessonPrompt);
+    lessonContainer.innerHTML = lessonHTML;
+    submitLoading.classList.add('hidden');
+
+    document.getElementById('test-section').classList.add('hidden');
+    document.getElementById('lesson-section').classList.remove('hidden');
+}
+</script>
+
+</body>
+</html>
